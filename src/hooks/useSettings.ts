@@ -11,6 +11,8 @@ export interface ConfettiSettings {
   useEmojis: boolean;
   customImages: string[]; // Base64 strings
   useCustomImages: boolean;
+  shortcutSmall: string;
+  shortcutBig: string;
 }
 
 const DEFAULT_SETTINGS: ConfettiSettings = {
@@ -24,6 +26,8 @@ const DEFAULT_SETTINGS: ConfettiSettings = {
   useEmojis: false,
   customImages: [],
   useCustomImages: false,
+  shortcutSmall: 'Alt+C',
+  shortcutBig: 'Alt+Shift+C',
 };
 
 const STORAGE_KEY = 'desktop-celebrator-settings';

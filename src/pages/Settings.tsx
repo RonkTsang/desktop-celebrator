@@ -5,7 +5,7 @@ import { useSettings } from '../hooks/useSettings';
 
 const Settings: React.FC = () => {
   const { settings, updateSettings, resetSettings } = useSettings();
-  const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'triggers'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'shortcuts' | 'triggers'>('general');
   const [newEmoji, setNewEmoji] = useState('');
 
   const triggerSmall = async () => {
@@ -61,6 +61,12 @@ const Settings: React.FC = () => {
             active={activeTab === 'appearance'}
             onClick={() => setActiveTab('appearance')}
             icon="🎨"
+          />
+          <SidebarItem
+            label="Shortcuts"
+            active={activeTab === 'shortcuts'}
+            onClick={() => setActiveTab('shortcuts')}
+            icon="⌨️"
           />
           <SidebarItem
             label="Triggers & Git"
@@ -208,6 +214,54 @@ const Settings: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </Section>
+            </div>
+          )}
+
+          {activeTab === 'shortcuts' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <Section title="Keyboard Shortcuts">
+                <div className="bg-white p-6 rounded-xl border border-[#d2d2d7] shadow-sm space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Small Celebration
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.shortcutSmall}
+                      onChange={(e) => updateSettings({ shortcutSmall: e.target.value })}
+                      placeholder="e.g., Alt+C"
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-sm"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Triggers a quick confetti burst
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Big Celebration
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.shortcutBig}
+                      onChange={(e) => updateSettings({ shortcutBig: e.target.value })}
+                      placeholder="e.g., Alt+Shift+C"
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-sm"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Triggers a continuous confetti celebration
+                    </p>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-200">
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      <strong>Supported modifiers:</strong> Alt, Shift, Ctrl, Command (or Cmd), Option (or Opt), Super<br />
+                      <strong>Format:</strong> Modifier+Key (e.g., Alt+C, Ctrl+Shift+P)<br />
+                      <strong>Note:</strong> Changes take effect after saving and may require restarting the overlay.
+                    </p>
+                  </div>
+                </div>
               </Section>
             </div>
           )}

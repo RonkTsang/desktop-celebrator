@@ -10,6 +10,7 @@ const ConfettiOverlay: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { settings } = useSettings();
   const settingsRef = useRef(settings);
+  const myConfettiRef = useRef<confetti.CreateTypes | null>(null);
 
   // Keep settingsRef in sync with settings state
   useEffect(() => {
@@ -27,53 +28,61 @@ const ConfettiOverlay: React.FC = () => {
           resize: true,
           useWorker: true,
         });
+        myConfettiRef.current = myConfetti; // Store the confetti instance
 
         // Register shortcuts
-        try {
-          await unregisterAll(); // Clear previous shortcuts
-          await register('Alt+C', (event) => {
-            if (event.state === "Pressed") {
-              const options = getConfettiOptions(settingsRef.current);
-              myConfetti({
-                ...options,
-                origin: { y: 0.6 },
-              });
-            }
-          });
-          await register('Alt+Shift+C', (event) => {
-            if (event.state === "Pressed") {
-              const duration = 3000;
-              const end = Date.now() + duration;
-              (function frame() {
-                const currentSettings = settingsRef.current;
-                const options = getConfettiOptions(currentSettings);
+        const registerShortcuts = async () => {
+          try {
+            await unregisterAll(); // Clear previous shortcuts
 
-                myConfetti({
+            const currentShortcuts = settingsRef.current;
+
+            await register(currentShortcuts.shortcutSmall, (event) => {
+              if (event.state === "Pressed") {
+                const options = getConfettiOptions(settingsRef.current);
+                myConfettiRef.current?.({
                   ...options,
-                  particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)), // Scale down for continuous
-                  angle: 60,
-                  origin: { x: 0 },
+                  origin: { y: 0.6 },
                 });
-                myConfetti({
-                  ...options,
-                  particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
-                  angle: 120,
-                  origin: { x: 1 },
-                });
-                if (Date.now() < end) {
-                  requestAnimationFrame(frame);
-                }
-              })();
-            }
-          });
-        } catch (error) {
-          console.error('Failed to register shortcuts:', error);
-        }
+              }
+            });
+            await register(currentShortcuts.shortcutBig, (event) => {
+              if (event.state === "Pressed") {
+                const duration = 3000;
+                const end = Date.now() + duration;
+                (function frame() {
+                  const currentSettings = settingsRef.current;
+                  const options = getConfettiOptions(currentSettings);
+
+                  myConfettiRef.current?.({
+                    ...options,
+                    particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)), // Scale down for continuous
+                    angle: 60,
+                    origin: { x: 0 },
+                  });
+                  myConfettiRef.current?.({
+                    ...options,
+                    particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
+                    angle: 120,
+                    origin: { x: 1 },
+                  });
+                  if (Date.now() < end) {
+                    requestAnimationFrame(frame);
+                  }
+                })();
+              }
+            });
+          } catch (error) {
+            console.error('Failed to register shortcuts:', error);
+          }
+        };
+
+        await registerShortcuts();
 
         const unlistenSmall = await listen('celebrate-small', () => {
           console.log('Received celebrate-small event');
           const options = getConfettiOptions(settingsRef.current);
-          myConfetti({
+          myConfettiRef.current?.({
             ...options,
             origin: { y: 0.6 },
           });
@@ -87,13 +96,13 @@ const ConfettiOverlay: React.FC = () => {
             const currentSettings = settingsRef.current;
             const options = getConfettiOptions(currentSettings);
 
-            myConfetti({
+            myConfettiRef.current?.({
               ...options,
               particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
               angle: 60,
               origin: { x: 0 },
             });
-            myConfetti({
+            myConfettiRef.current?.({
               ...options,
               particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
               angle: 120,
@@ -119,6 +128,64 @@ const ConfettiOverlay: React.FC = () => {
       cleanupPromise.then(cleanup => cleanup && cleanup());
     };
   }, []);
+
+  // Re-register shortcuts when they change
+  useEffect(() => {
+    const reregisterShortcuts = async () => {
+      if (!myConfettiRef.current) return; // Ensure confetti instance is available
+
+      try {
+        await unregisterAll();
+
+        await register(settings.shortcutSmall, (event) => {
+          if (event.state === "Pressed") {
+            const options = getConfettiOptions(settingsRef.current);
+            myConfettiRef.current?.({
+              ...options,
+              origin: { y: 0.6 },
+            });
+          }
+        });
+
+        await register(settings.shortcutBig, (event) => {
+          if (event.state === "Pressed") {
+            const duration = 3000;
+            const end = Date.now() + duration;
+            (function frame() {
+              const currentSettings = settingsRef.current;
+              const options = getConfettiOptions(currentSettings);
+
+              myConfettiRef.current?.({
+                ...options,
+                particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
+                angle: 60,
+                origin: { x: 0 },
+              });
+              myConfettiRef.current?.({
+                ...options,
+                particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
+                angle: 120,
+                origin: { x: 1 },
+              });
+              if (Date.now() < end) {
+                requestAnimationFrame(frame);
+              }
+            })();
+          }
+        });
+      } catch (error) {
+        console.error('Failed to re-register shortcuts:', error);
+      }
+    };
+
+    reregisterShortcuts();
+
+    // Cleanup function for this useEffect to unregister shortcuts when component unmounts
+    // or when dependencies change before re-registering.
+    return () => {
+      unregisterAll().catch(console.error);
+    };
+  }, [settings.shortcutSmall, settings.shortcutBig, myConfettiRef]); // Add myConfettiRef to dependencies
 
   return (
     <div className="w-screen h-screen bg-transparent pointer-events-none overflow-hidden">
