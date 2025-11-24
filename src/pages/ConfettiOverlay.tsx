@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut';
 import { useSettings } from '../hooks/useSettings';
 import { getConfettiOptions } from '../utils/confettiUtils';
@@ -11,6 +12,22 @@ const ConfettiOverlay: React.FC = () => {
   const { settings } = useSettings();
   const settingsRef = useRef(settings);
   const myConfettiRef = useRef<confetti.CreateTypes | null>(null);
+  const activeAnimations = useRef(0);
+
+  const showWindow = async () => {
+    activeAnimations.current += 1;
+    if (activeAnimations.current === 1) {
+      await getCurrentWindow().show();
+    }
+  };
+
+  const hideWindow = async () => {
+    activeAnimations.current -= 1;
+    if (activeAnimations.current <= 0) {
+      activeAnimations.current = 0;
+      await getCurrentWindow().hide();
+    }
+  };
 
   // Keep settingsRef in sync with settings state
   useEffect(() => {
@@ -37,39 +54,56 @@ const ConfettiOverlay: React.FC = () => {
 
             const currentShortcuts = settingsRef.current;
 
-            await register(currentShortcuts.shortcutSmall, (event) => {
+            await register(currentShortcuts.shortcutSmall, async (event) => {
               if (event.state === "Pressed") {
+                await showWindow();
                 const options = getConfettiOptions(settingsRef.current);
-                myConfettiRef.current?.({
+                const promise = myConfettiRef.current?.({
                   ...options,
                   origin: { y: 0.6 },
                 });
+                if (promise) await promise;
+                await hideWindow();
               }
             });
-            await register(currentShortcuts.shortcutBig, (event) => {
+            await register(currentShortcuts.shortcutBig, async (event) => {
               if (event.state === "Pressed") {
+                await showWindow();
                 const duration = 3000;
                 const end = Date.now() + duration;
-                (function frame() {
-                  const currentSettings = settingsRef.current;
-                  const options = getConfettiOptions(currentSettings);
 
-                  myConfettiRef.current?.({
-                    ...options,
-                    particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)), // Scale down for continuous
-                    angle: 60,
-                    origin: { x: 0 },
-                  });
-                  myConfettiRef.current?.({
-                    ...options,
-                    particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
-                    angle: 120,
-                    origin: { x: 1 },
-                  });
-                  if (Date.now() < end) {
-                    requestAnimationFrame(frame);
-                  }
-                })();
+                // Track the last promise to know when animation fully ends
+                let lastPromise: Promise<unknown> | undefined;
+
+                await new Promise<void>((resolve) => {
+                  (function frame() {
+                    const currentSettings = settingsRef.current;
+                    const options = getConfettiOptions(currentSettings);
+
+                    myConfettiRef.current?.({
+                      ...options,
+                      particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)), // Scale down for continuous
+                      angle: 60,
+                      origin: { x: 0 },
+                    });
+                    const result = myConfettiRef.current?.({
+                      ...options,
+                      particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
+                      angle: 120,
+                      origin: { x: 1 },
+                    });
+                    if (result) lastPromise = result;
+
+                    if (Date.now() < end) {
+                      requestAnimationFrame(frame);
+                    } else {
+                      resolve();
+                    }
+                  })();
+                });
+
+                if (lastPromise) await lastPromise;
+                await hideWindow();
               }
             });
           } catch (error) {
@@ -79,40 +113,53 @@ const ConfettiOverlay: React.FC = () => {
 
         await registerShortcuts();
 
-        const unlistenSmall = await listen('celebrate-small', () => {
+        const unlistenSmall = await listen('celebrate-small', async () => {
           console.log('Received celebrate-small event');
+          await showWindow();
           const options = getConfettiOptions(settingsRef.current);
-          myConfettiRef.current?.({
+          const promise = myConfettiRef.current?.({
             ...options,
             origin: { y: 0.6 },
           });
+          if (promise) await promise;
+          await hideWindow();
         });
 
-        const unlistenBig = await listen('celebrate-big', () => {
+        const unlistenBig = await listen('celebrate-big', async () => {
+          await showWindow();
           const duration = 3000;
           const end = Date.now() + duration;
+          let lastPromise: Promise<unknown> | undefined;
 
-          (function frame() {
-            const currentSettings = settingsRef.current;
-            const options = getConfettiOptions(currentSettings);
+          await new Promise<void>((resolve) => {
+            (function frame() {
+              const currentSettings = settingsRef.current;
+              const options = getConfettiOptions(currentSettings);
 
-            myConfettiRef.current?.({
-              ...options,
-              particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
-              angle: 60,
-              origin: { x: 0 },
-            });
-            myConfettiRef.current?.({
-              ...options,
-              particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
-              angle: 120,
-              origin: { x: 1 },
-            });
+              myConfettiRef.current?.({
+                ...options,
+                particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
+                angle: 60,
+                origin: { x: 0 },
+              });
+              const result = myConfettiRef.current?.({
+                ...options,
+                particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
+                angle: 120,
+                origin: { x: 1 },
+              });
+              if (result) lastPromise = result;
 
-            if (Date.now() < end) {
-              requestAnimationFrame(frame);
-            }
-          })();
+              if (Date.now() < end) {
+                requestAnimationFrame(frame);
+              } else {
+                resolve();
+              }
+            })();
+          });
+
+          if (lastPromise) await lastPromise;
+          await hideWindow();
         });
 
         return () => {
@@ -137,40 +184,55 @@ const ConfettiOverlay: React.FC = () => {
       try {
         await unregisterAll();
 
-        await register(settings.shortcutSmall, (event) => {
+        await register(settings.shortcutSmall, async (event) => {
           if (event.state === "Pressed") {
+            await showWindow();
             const options = getConfettiOptions(settingsRef.current);
-            myConfettiRef.current?.({
+            const promise = myConfettiRef.current?.({
               ...options,
               origin: { y: 0.6 },
             });
+            if (promise) await promise;
+            await hideWindow();
           }
         });
 
-        await register(settings.shortcutBig, (event) => {
+        await register(settings.shortcutBig, async (event) => {
           if (event.state === "Pressed") {
+            await showWindow();
             const duration = 3000;
             const end = Date.now() + duration;
-            (function frame() {
-              const currentSettings = settingsRef.current;
-              const options = getConfettiOptions(currentSettings);
+            let lastPromise: Promise<unknown> | undefined;
 
-              myConfettiRef.current?.({
-                ...options,
-                particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
-                angle: 60,
-                origin: { x: 0 },
-              });
-              myConfettiRef.current?.({
-                ...options,
-                particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
-                angle: 120,
-                origin: { x: 1 },
-              });
-              if (Date.now() < end) {
-                requestAnimationFrame(frame);
-              }
-            })();
+            await new Promise<void>((resolve) => {
+              (function frame() {
+                const currentSettings = settingsRef.current;
+                const options = getConfettiOptions(currentSettings);
+
+                myConfettiRef.current?.({
+                  ...options,
+                  particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
+                  angle: 60,
+                  origin: { x: 0 },
+                });
+                const result = myConfettiRef.current?.({
+                  ...options,
+                  particleCount: Math.max(2, Math.floor(currentSettings.particleCount / 50)),
+                  angle: 120,
+                  origin: { x: 1 },
+                });
+                if (result) lastPromise = result;
+
+                if (Date.now() < end) {
+                  requestAnimationFrame(frame);
+                } else {
+                  resolve();
+                }
+              })();
+            });
+
+            if (lastPromise) await lastPromise;
+            await hideWindow();
           }
         });
       } catch (error) {
